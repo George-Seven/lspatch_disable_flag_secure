@@ -1,0 +1,106 @@
+name: Rebuild APK with Disable FLAG_SECURE
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: "Android app package (e.g. com.instagram.android or com.app@version)"
+        required: false
+
+      apk_url:
+        description: "Direct APK download link (only if you don't use package name)"
+        required: false
+
+      download_source:
+        description: "APK download source (apk-pure, f-droid, huawei-app-gallery)"
+        required: false
+
+      signture_bypass:
+        description: "Signature bypass level (if apk has protection)"
+        default: "2"
+        type: choice
+        options:
+          - "0"
+          - "1"
+          - "2"
+
+      injectdex:
+        description: "Inject dex directly (useful if apk is browser)"
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Java 21
+        uses: actions/setup-java@v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build
+        run: |
+          set -e
+
+          BASENAME="patched"
+
+          wget -q -O lspatch.jar "$(curl -s https://api.github.com/repos/JingMatrix/LSPatch/releases/latest | jq -r '.assets[] | select(.name | test("^lspatch.jar$")) | .browser_download_url')"
+
+          wget -q -O Xposed-Disable-FLAG_SECURE.apk "$(curl -s https://api.github.com/repos/Xposed-Modules-Repo/com.varuns2002.disable_flag_secure/releases/latest | jq -r '.assets[] | select(.name | test("^Xposed-Disable-FLAG_SECURE_.*\\.apk$")) | .browser_download_url')"
+
+          wget -q -O apkeep "$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | jq -r '.assets[] | select(.name | test("^apkeep-x86_64-unknown-linux-gnu$")) | .browser_download_url')"
+
+          chmod +x apkeep
+          mkdir -p apk_download
+
+          if [ -n "${{ github.event.inputs.app_id }}" ]; then
+            SRC="${{ github.event.inputs.download_source }}"
+            if [ -n "$SRC" ]; then
+              ./apkeep -a "${{ github.event.inputs.app_id }}" -d "$SRC" ./apk_download
+            else
+              ./apkeep -a "${{ github.event.inputs.app_id }}" ./apk_download
+            fi
+
+            FILE="$(basename ./apk_download/*)"
+            BASENAME="${FILE%.*}"
+
+          elif [ -n "${{ github.event.inputs.apk_url }}" ]; then
+            wget -q -P ./apk_download "${{ github.event.inputs.apk_url }}"
+          else
+            exit 1
+          fi
+
+          if ! file ./apk_download/* | grep -q "Android package (APK)"; then
+            wget -q -O APKEditor.jar "$(curl -s https://api.github.com/repos/REAndroid/APKEditor/releases/latest | jq -r '.assets[] | select(.name | test("^APKEditor-.*\\.jar$")) | .browser_download_url')"
+            java -jar APKEditor.jar m -i ./apk_download/* -o main.apk -extractNativeLibs true
+          else
+            cp ./apk_download/* main.apk
+          fi
+
+          mkdir -p lspatch
+
+          INJECT_FLAG=""
+          if [ "${{ github.event.inputs.injectdex }}" = "true" ]; then
+            INJECT_FLAG="--injectdex"
+          fi
+
+          java -jar lspatch.jar \
+            -l ${{ github.event.inputs.signture_bypass }} \
+            -m Xposed-Disable-FLAG_SECURE.apk \
+            $INJECT_FLAG \
+            -o lspatch main.apk
+
+          mkdir output
+
+          mv lspatch/* "lspatch/${BASENAME}.apk"
+
+      - name: Upload patched APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: patched-apk
+          path: "lspatch/*"
