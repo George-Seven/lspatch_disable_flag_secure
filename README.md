@@ -6,7 +6,7 @@ In simpler terms, this disables screen mirroring protection of the app, so that 
 
 To use it, you need to use the GitHub Actions workflow system -
 
-1. Fork this repo
+1. [Fork](https://github.com/George-Seven/lspatch_disable_flag_secure/fork) this repo
 2. Goto "Actions" tab at the top of the page
 3. Enable workflows
 4. Select drop down menu "All workflows"
