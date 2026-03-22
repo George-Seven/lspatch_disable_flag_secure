@@ -12,7 +12,7 @@ To use it, you need to use the GitHub Actions workflow system -
 4. Select drop down menu "All workflows"
 5. Select "Rebuild APK with Disable FLAG_SECURE"
 6. Select "Run workflow"
-7. There is two choices for selecting apk, either use package name of app (eg:- `com.naver.linewebtoon`) or a direct link to the apk. Fill the corresponding field.
+7. There are two choices for selecting apk, either use package name of app (eg:- `com.naver.linewebtoon`) or a direct link to the apk. Fill the corresponding field.
 8. Scroll down and select the green "Run workflow" button.
 9. Wait some seconds until the build finishes with a green tick.
 10. Refresh the page once to sync
