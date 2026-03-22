@@ -1,6 +1,6 @@
 # Description
 
-Use GitHub Actions workflow to disable FLAG_SECURE for APK/APKS/XAPK, etc, via LSPatch.
+Uses GitHub Actions workflow to disable FLAG_SECURE for APK/APKS/XAPK, etc, via LSPatch.
 
 In simpler terms, this disables screen mirroring protection of the app, so that you can use applications like Scrcpy to screen mirror the app, which would otherwise appear as a black screen.
 
