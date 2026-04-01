@@ -45,42 +45,71 @@ jobs:
 
       - name: Build
         run: |
-          set -e
+          set -euxo pipefail
+
+          echo "app_id=${{ github.event.inputs.app_id }}"
+          echo "apk_url=${{ github.event.inputs.apk_url }}"
+          echo "download_source=${{ github.event.inputs.download_source }}"
+          echo "signture_bypass=${{ github.event.inputs.signture_bypass }}"
+          echo "injectdex=${{ github.event.inputs.injectdex }}"
 
           BASENAME="patched"
 
-          wget -q -O lspatch.jar "$(curl -s https://api.github.com/repos/JingMatrix/LSPatch/releases/latest | jq -r '.assets[] | select(.name | test("^lspatch.jar$")) | .browser_download_url')"
+          LSPATCH_URL=$(curl -s https://api.github.com/repos/JingMatrix/LSPatch/releases/latest | jq -r '.assets[] | select(.name=="lspatch.jar") | .browser_download_url')
+          echo "LSPATCH_URL=$LSPATCH_URL"
+          wget -O lspatch.jar "$LSPATCH_URL"
 
-          wget -q -O Xposed-Disable-FLAG_SECURE.apk "$(curl -s https://api.github.com/repos/Xposed-Modules-Repo/com.varuns2002.disable_flag_secure/releases/latest | jq -r '.assets[] | select(.name | test("^Xposed-Disable-FLAG_SECURE_.*\\.apk$")) | .browser_download_url')"
+          MODULE_URL=$(curl -s https://api.github.com/repos/Xposed-Modules-Repo/com.varuns2002.disable_flag_secure/releases/latest | jq -r '.assets[] | select(.name | test("^Xposed-Disable-FLAG_SECURE_.*\\.apk$")) | .browser_download_url')
+          echo "MODULE_URL=$MODULE_URL"
+          wget -O Xposed-Disable-FLAG_SECURE.apk "$MODULE_URL"
 
-          wget -q -O apkeep "$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | jq -r '.assets[] | select(.name | test("^apkeep-x86_64-unknown-linux-gnu$")) | .browser_download_url')"
+          APKEEP_URL=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | jq -r '.assets[] | select(.name=="apkeep-x86_64-unknown-linux-gnu") | .browser_download_url')
+          echo "APKEEP_URL=$APKEEP_URL"
+          wget -O apkeep "$APKEEP_URL"
 
           chmod +x apkeep
           mkdir -p apk_download
 
           if [ -n "${{ github.event.inputs.app_id }}" ]; then
             SRC="${{ github.event.inputs.download_source }}"
+            echo "Using app_id with source=$SRC"
+
             if [ -n "$SRC" ]; then
               ./apkeep -a "${{ github.event.inputs.app_id }}" -d "$SRC" ./apk_download
             else
               ./apkeep -a "${{ github.event.inputs.app_id }}" ./apk_download
             fi
 
-            FILE="$(basename ./apk_download/*)"
+            ls -la apk_download
+
+            FILE=$(ls apk_download | head -n 1)
             BASENAME="${FILE%.*}"
 
           elif [ -n "${{ github.event.inputs.apk_url }}" ]; then
-            wget -q -P ./apk_download "${{ github.event.inputs.apk_url }}"
+            echo "Using direct apk_url"
+            wget -P ./apk_download "${{ github.event.inputs.apk_url }}"
+            ls -la apk_download
           else
+            echo "No input provided"
             exit 1
           fi
 
-          if ! file ./apk_download/* | grep -q "Android package (APK)"; then
-            wget -q -O APKEditor.jar "$(curl -s https://api.github.com/repos/REAndroid/APKEditor/releases/latest | jq -r '.assets[] | select(.name | test("^APKEditor-.*\\.jar$")) | .browser_download_url')"
-            java -jar APKEditor.jar m -i ./apk_download/* -o main.apk
-          else
-            cp ./apk_download/* main.apk
+          if [ ! "$(ls -A apk_download)" ]; then
+            echo "apk_download is empty"
+            exit 1
           fi
+
+          if ! file apk_download/* | grep -q "Android package (APK)"; then
+            APKEDITOR_URL=$(curl -s https://api.github.com/repos/REAndroid/APKEditor/releases/latest | jq -r '.assets[] | select(.name | test("^APKEditor-.*\\.jar$")) | .browser_download_url')
+            echo "APKEDITOR_URL=$APKEDITOR_URL"
+            wget -O APKEditor.jar "$APKEDITOR_URL"
+
+            java -jar APKEditor.jar m -i apk_download/* -o main.apk
+          else
+            cp apk_download/* main.apk
+          fi
+
+          ls -la
 
           mkdir -p lspatch
 
@@ -95,7 +124,9 @@ jobs:
             $INJECT_FLAG \
             -o lspatch main.apk
 
-          mkdir output
+          ls -la lspatch
+
+          mkdir -p output
 
           mv lspatch/* "lspatch/${BASENAME}.apk"
 
